@@ -2,7 +2,8 @@ import json
 import base64
 from algosdk import account, mnemonic
 from algosdk.v2client import algod
-from algosdk.transaction import PaymentTxn
+from algosdk import transaction
+
 
 def generate_algorand_keypair():
     """
@@ -40,6 +41,7 @@ ALGOD_ADDRESS = 'http://localhost:4001'
 ALGOD_TOKEN = ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
                'aaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
+
 class AccountInfo:
     def __init__(self,
                  address,
@@ -55,9 +57,9 @@ class AccountInfo:
         self.algod_client = algod_client or self._get_client()
         self.account_info = self.algod_client.account_info(address)
 
-        # accountKeys 
+        # accountKeys
         # - https://developer.algorand.org/docs/rest-apis/algod/v2/#account
-        self.info_keys = ['address', 'amount', 'amount-without-pending-rewards', 
+        self.info_keys = ['address', 'amount', 'amount-without-pending-rewards',
                           'assets', 'min-balance', 'rewards', 'round', 'status',
                           'total-apps-opted-in', 'total-created-apps',
                           'total-created-assets']
@@ -80,16 +82,41 @@ def first_transaction_example(private_key, my_address):
 
     # build transaction
     params = algod_client.suggested_params()
-    # comment out next two lines to use suggested params 
+    # comment out next two lines to use suggested params
     params.flat_fee = True
-    params.fee = 1000 
+    params.fee = 1000
     receiver = tenXStudent['address']
+    amount = 100000
     note = "Hello World".encode()
 
-    unsigned_txn = PaymentTxn(my_address, params, receiver, 1000000, None, note)
+    unsigned_txn = transaction.PaymentTxn(my_address, params, receiver,
+                                          amount, None, note)
 
     # sign transaction
     signed_txn = unsigned_txn.sign(private_key)
+
+    # submit transaction
+    txid = algod_client.send_transaction(signed_txn)
+    print(f'Sented transaction with txID: {txid}')
+
+    # wait for comfirmation
+    try:
+        confirmed_txn = transaction.wait_for_confirmation(algod_client,
+                                                          txid, 4)
+    except Exception as err:
+        print(err)
+        return
+
+    print(f'Txn information: {json.dumps(confirmed_txn, indent=4)}')
+    print(f'Decoded note: '
+          f'{base64.b64decode(confirmed_txn["txn"]["txn"]["note"]).decode()}')
+    print(f'Starting Account balance: {tenXStaff_info.amount}')
+    print(f'Amount transfered: {amount} microAlgos')
+    print(f'Fee: {params.fee} microAlgos')
+
+    tenXStaff_info = AccountInfo(tenXStaff['address'], algod_client)
+
+    print(f'Final Account balance: {tenXStaff_info.amount} microAlgos')
 
 
 first_transaction_example(tenXStaff['private_key'], tenXStaff['address'])
